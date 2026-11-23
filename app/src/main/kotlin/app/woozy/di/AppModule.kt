@@ -8,14 +8,18 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import app.woozy.BuildConfig
 import app.woozy.data.api.PhotonApi
+import app.woozy.data.api.ValhallaApi
+import app.woozy.data.database.FavoriteDao
 import app.woozy.data.database.RecentDestinationDao
 import app.woozy.data.database.TrafficReportDao
 import app.woozy.data.database.WoozyDatabase
 import app.woozy.data.providers.GeocodingProvider
 import app.woozy.data.providers.NoBackendReportDataSource
-import app.woozy.data.providers.NoSpeedLimitDataProvider
 import app.woozy.data.providers.PhotonGeocodingProvider
 import app.woozy.data.providers.ReportRemoteDataSource
+import app.woozy.data.providers.RoutingProvider
+import app.woozy.data.providers.ValhallaRoutingProvider
+import app.woozy.data.providers.ValhallaSpeedLimitProvider
 import app.woozy.data.providers.SpeedLimitProvider
 import dagger.Binds
 import dagger.Module
@@ -54,6 +58,9 @@ object AppModule {
     fun provideTrafficReportDao(db: WoozyDatabase): TrafficReportDao = db.trafficReportDao()
 
     @Provides
+    fun provideFavoriteDao(db: WoozyDatabase): FavoriteDao = db.favoriteDao()
+
+    @Provides
     fun provideRecentDestinationDao(db: WoozyDatabase): RecentDestinationDao = db.recentDestinationDao()
 
     @Provides
@@ -64,6 +71,8 @@ object AppModule {
     @Provides
     @Singleton
     fun provideJson(): Json = Json {
+        // Request DTOs rely on defaults (e.g. Valhalla "costing": "auto"); they must be sent.
+        encodeDefaults = true
         ignoreUnknownKeys = true
         explicitNulls = false
         coerceInputValues = true
@@ -94,6 +103,18 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideValhallaApi(client: OkHttpClient, json: Json): ValhallaApi = Retrofit.Builder()
+        .baseUrl(BuildConfig.ROUTING_BASE_URL)
+        .client(
+            // Long routes can take a few seconds on the shared public instance.
+            client.newBuilder().readTimeout(30, TimeUnit.SECONDS).build(),
+        )
+        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+        .build()
+        .create(ValhallaApi::class.java)
+
+    @Provides
+    @Singleton
     fun providePhotonApi(client: OkHttpClient, json: Json): PhotonApi = Retrofit.Builder()
         .baseUrl(BuildConfig.GEOCODER_BASE_URL)
         .client(client)
@@ -110,7 +131,10 @@ abstract class ProvidersModule {
     abstract fun bindGeocoder(impl: PhotonGeocodingProvider): GeocodingProvider
 
     @Binds
-    abstract fun bindSpeedLimitProvider(impl: NoSpeedLimitDataProvider): SpeedLimitProvider
+    abstract fun bindRoutingProvider(impl: ValhallaRoutingProvider): RoutingProvider
+
+    @Binds
+    abstract fun bindSpeedLimitProvider(impl: ValhallaSpeedLimitProvider): SpeedLimitProvider
 
     @Binds
     abstract fun bindReportRemote(impl: NoBackendReportDataSource): ReportRemoteDataSource

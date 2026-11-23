@@ -28,17 +28,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.woozy.R
-import app.woozy.domain.model.SpeedLimit
 import app.woozy.domain.model.SpeedUnit
 import app.woozy.ui.theme.WoozyColors
 import app.woozy.ui.theme.WoozyType
 
 /**
- * Round speed-limit sign: white centre, red ring, black numerals. Shows "--" when the limit is
- * unknown (never a guessed value). Pulses while [isSpeeding].
+ * Round speed-limit sign: white centre, red ring, black numerals. [limit] is in the user's unit;
+ * null renders "--" (never a guessed value). Pulses while [isSpeeding].
  */
 @Composable
-fun SpeedLimitSign(limit: SpeedLimit, isSpeeding: Boolean, modifier: Modifier = Modifier, size: Dp = 64.dp) {
+fun SpeedLimitSign(limit: Int?, isSpeeding: Boolean, modifier: Modifier = Modifier, size: Dp = 64.dp) {
     val scale = if (isSpeeding) {
         val transition = rememberInfiniteTransition(label = "speeding")
         val s by transition.animateFloat(
@@ -51,8 +50,7 @@ fun SpeedLimitSign(limit: SpeedLimit, isSpeeding: Boolean, modifier: Modifier = 
     } else {
         1f
     }
-    val known = limit as? SpeedLimit.Known
-    val description = known?.let { stringResource(R.string.speed_limit_value, it.kmh) }
+    val description = limit?.let { stringResource(R.string.speed_limit_value, it) }
         ?: stringResource(R.string.speed_limit_unknown)
     val ringWidth = with(LocalDensity.current) { (size * 0.13f).toPx() }
 
@@ -73,11 +71,11 @@ fun SpeedLimitSign(limit: SpeedLimit, isSpeeding: Boolean, modifier: Modifier = 
                 style = Stroke(width = ringWidth),
             )
         }
-        val text = known?.kmh?.toString() ?: "--"
+        val text = limit?.toString() ?: "--"
         Text(
             text = text,
             style = TextStyle(
-                color = if (known != null) Color.Black else Color(0xFF8A8F96),
+                color = if (limit != null) Color.Black else Color(0xFF8A8F96),
                 fontWeight = FontWeight.Bold,
                 fontSize = when {
                     text.length >= 3 -> (size.value * 0.30f).sp

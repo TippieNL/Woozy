@@ -10,10 +10,13 @@ import app.woozy.data.repository.DestinationRepository
 import app.woozy.data.repository.ReportRepository
 import app.woozy.data.repository.SettingsRepository
 import app.woozy.data.repository.SubmitResult
+import app.woozy.domain.model.FavoriteKind
 import app.woozy.domain.model.LocationFix
 import app.woozy.domain.model.Place
 import app.woozy.domain.model.ReportType
+import app.woozy.domain.model.RouteOptions
 import app.woozy.domain.model.SpeedLimit
+import app.woozy.domain.model.SpeedUnit
 import app.woozy.domain.model.TrafficReport
 import app.woozy.domain.model.UserSettings
 import app.woozy.location.ConnectivityMonitor
@@ -21,7 +24,11 @@ import app.woozy.location.LocationPermission
 import app.woozy.location.LocationRepository
 import app.woozy.location.LocationStatusMonitor
 import app.woozy.location.SpeedCalculator
+import app.woozy.navigation.NavigationEvent
+import app.woozy.navigation.NavigationManager
+import app.woozy.navigation.NavigationState
 import app.woozy.services.VoiceAlertManager
+import app.woozy.traffic.SpeedingAlerter
 import app.woozy.ui.reports.style
 import app.woozy.util.Geo
 import app.woozy.voice.VoiceCommand
@@ -38,6 +45,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -55,12 +63,15 @@ data class MapUiState(
     /** Speed in the user's unit, null when unknown ("--"). */
     val speed: Int? = null,
     val speedLimit: SpeedLimit = SpeedLimit.Unknown,
+    /** Posted limit converted to the user's unit (mph rounded to 5), null when unknown. */
+    val speedLimitDisplay: Int? = null,
     val isSpeeding: Boolean = false,
     val roadName: String? = null,
     val settings: UserSettings = UserSettings(),
     val reports: List<TrafficReport> = emptyList(),
     val destination: Place? = null,
     val destinationDistanceMeters: Double? = null,
+    val navigation: NavigationState = NavigationState.Idle,
 )
 
 sealed interface MapEvent {
@@ -78,6 +89,7 @@ class MapViewModel @Inject constructor(
     private val reportRepository: ReportRepository,
     private val destinationRepository: DestinationRepository,
     speedLimitProvider: SpeedLimitProvider,
+    private val navigation: NavigationManager,
     private val voice: VoiceAlertManager,
 ) : ViewModel() {
 
@@ -85,6 +97,7 @@ class MapViewModel @Inject constructor(
     val fixes: SharedFlow<LocationFix> = locationRepository.fixes
 
     private val speedCalculator = SpeedCalculator()
+    private val speedingAlerter = SpeedingAlerter()
     private val roadName = MutableStateFlow<String?>(null)
 
     /** Latest fix, for attaching reports. Updated only while the UI is subscribed. */
@@ -101,13 +114,16 @@ class MapViewModel @Inject constructor(
     }
 
     /**
-     * Every fix passes through the speed calculator exactly once. This flow is only collected via
-     * [uiState] (WhileSubscribed), so GPS stops ~5 s after the map leaves the screen.
+     * Every fix passes through the speed calculator and the navigation engine exactly once. This
+     * flow is only collected via [uiState] (WhileSubscribed), so GPS stops ~5 s after the map
+     * leaves the screen. (Phase 6 moves this into a foreground service for screen-off navigation.)
      */
     private val fixState: Flow<FixState> = fixes
         .map { fix ->
             latestFix.value = fix
-            FixState(fix, speedCalculator.update(fix))
+            val speed = speedCalculator.update(fix)
+            navigation.onFix(fix, speed)
+            FixState(fix, speed)
         }
         .onStart { emit(FixState(null, null)) }
 
@@ -142,31 +158,57 @@ class MapViewModel @Inject constructor(
         reportRepository.activeReports,
         destinationRepository.selected,
         roadName,
-    ) { settings, reports, destination, road -> ContentPart(settings, reports, destination, road) }
+        navigation.state,
+    ) { settings, reports, destination, road, nav -> ContentPart(settings, reports, destination, road, nav) }
 
     val uiState: StateFlow<MapUiState> = combine(locationPart, contentPart) { loc, content ->
         val usable = loc.gps == GpsStatus.OK || loc.gps == GpsStatus.WEAK
+        val settings = content.settings
         val mps = loc.fixState.speedMps?.takeIf { usable }
-        val speedKmh = mps?.times(3.6)
-        val limit = loc.limit
+        val speed = mps?.let { settings.speedUnit.fromMps(it).roundToInt() }
+        val limitDisplay = (loc.limit as? SpeedLimit.Known)?.let { displayLimit(it.kmh, settings.speedUnit) }
         val fix = loc.fixState.fix
         MapUiState(
             permission = loc.permission,
             locationEnabled = loc.enabled,
             online = loc.online,
             gpsStatus = loc.gps,
-            speed = mps?.let { content.settings.speedUnit.fromMps(it).roundToInt() },
-            speedLimit = limit,
-            isSpeeding = limit is SpeedLimit.Known && speedKmh != null && speedKmh >= limit.kmh + SPEEDING_TOLERANCE_KMH,
+            speed = speed,
+            speedLimit = loc.limit,
+            speedLimitDisplay = limitDisplay,
+            isSpeeding = isSpeeding(speed, limitDisplay, settings.speedingTolerance),
             roadName = content.roadName.takeIf { usable },
-            settings = content.settings,
+            settings = settings,
             reports = content.reports,
             destination = content.destination,
             destinationDistanceMeters = content.destination?.let { d ->
                 fix?.let { Geo.distanceMeters(it.latitude, it.longitude, d.latitude, d.longitude) }
             },
+            navigation = content.navigation,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), MapUiState())
+    }
+        .onEach(::maybeWarnSpeeding)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), MapUiState())
+
+    init {
+        viewModelScope.launch {
+            navigation.events.collect { event ->
+                when (event) {
+                    is NavigationEvent.Arrived -> {
+                        destinationRepository.clearSelection()
+                        events.send(MapEvent.Message(context.getString(R.string.nav_arrived, event.destination.name)))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun maybeWarnSpeeding(state: MapUiState) {
+        val speak = speedingAlerter.update(state.isSpeeding, state.speedLimitDisplay, SystemClock.elapsedRealtime())
+        if (speak && state.settings.speedingVoiceAlert) {
+            voice.speak(context.getString(R.string.speeding_voice), VoiceAlertManager.Priority.HIGH)
+        }
+    }
 
     fun onRoadNameChanged(name: String?) {
         roadName.value = name
@@ -193,7 +235,7 @@ class MapViewModel @Inject constructor(
             val label = context.getString(type.style.label)
             val message = when (val result = reportRepository.submit(type, fix, roadName.value)) {
                 is SubmitResult.Submitted -> {
-                    voice.speak(context.getString(R.string.report_sent_voice, label), force = false)
+                    voice.speak(context.getString(R.string.report_sent_voice, label))
                     context.getString(R.string.report_sent, label) +
                         if (result.shared) "" else "\n" + context.getString(R.string.report_local_only)
                 }
@@ -205,17 +247,62 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    fun clearDestination() = destinationRepository.clearSelection()
+    // region destination & navigation
+
+    fun clearDestination() {
+        navigation.stop()
+        destinationRepository.clearSelection()
+    }
+
+    fun routeToDestination() {
+        uiState.value.destination?.let { navigation.preview(it) }
+    }
+
+    fun selectRoute(index: Int) = navigation.selectRoute(index)
+
+    fun startNavigation() = navigation.start()
+
+    /** Leaves the preview but keeps the destination pin. */
+    fun cancelPreview() = navigation.stop()
+
+    fun stopNavigation() {
+        navigation.stop()
+        destinationRepository.clearSelection()
+    }
+
+    fun setRouteOptions(options: RouteOptions) {
+        viewModelScope.launch {
+            settingsRepository.setRouteOptions(options)
+            navigation.refreshPreview()
+        }
+    }
+
+    fun saveFavorite(kind: FavoriteKind) {
+        val place = uiState.value.destination ?: return
+        viewModelScope.launch {
+            destinationRepository.setFavorite(kind, place)
+            message(if (kind == FavoriteKind.HOME) R.string.favorite_saved_home else R.string.favorite_saved_work)
+        }
+    }
+
+    // endregion
 
     fun onVoiceTranscript(transcript: String) {
         when (val command = VoiceCommandParser.parse(transcript)) {
             is VoiceCommand.Report -> submitReport(command.type)
             is VoiceCommand.Search -> events.trySend(MapEvent.OpenSearch(command.query))
-            is VoiceCommand.NavigateFavorite -> message(
-                if (command.favorite == VoiceCommand.Favorite.HOME) R.string.voice_no_favorite_home else R.string.voice_no_favorite_work,
-            )
+            is VoiceCommand.NavigateFavorite -> viewModelScope.launch {
+                val kind = if (command.favorite == VoiceCommand.Favorite.HOME) FavoriteKind.HOME else FavoriteKind.WORK
+                val place = destinationRepository.favorite(kind)
+                if (place == null) {
+                    message(if (kind == FavoriteKind.HOME) R.string.voice_no_favorite_home else R.string.voice_no_favorite_work)
+                } else {
+                    destinationRepository.select(place)
+                    navigation.preview(place, startWhenReady = true)
+                }
+            }
             VoiceCommand.Cancel -> {
-                destinationRepository.clearSelection()
+                clearDestination()
                 message(R.string.voice_cancelled)
             }
             VoiceCommand.Repeat -> if (!voice.repeatLast()) message(R.string.voice_nothing_to_repeat)
@@ -245,13 +332,21 @@ class MapViewModel @Inject constructor(
         val reports: List<TrafficReport>,
         val destination: Place?,
         val roadName: String?,
+        val navigation: NavigationState,
     )
 
-    private companion object {
-        const val GPS_LOST_AFTER_NANOS = 6_000_000_000L
-        const val WEAK_ACCURACY_METERS = 30f
+    companion object {
+        private const val GPS_LOST_AFTER_NANOS = 6_000_000_000L
+        private const val WEAK_ACCURACY_METERS = 30f
 
-        /** Phase 3 makes this user-configurable (+5/+10/+15) once real limits are available. */
-        const val SPEEDING_TOLERANCE_KMH = 5
+        /** Limits are posted in km/h in OSM for NL; mph users see the nearest 5 mph. */
+        fun displayLimit(kmh: Int, unit: SpeedUnit): Int =
+            if (unit == SpeedUnit.KMH) kmh else ((kmh / 1.609344) / 5).roundToInt() * 5
+
+        /** Tolerance 0 = any speed above the limit; otherwise speed ≥ limit + tolerance. */
+        fun isSpeeding(speed: Int?, limit: Int?, tolerance: Int): Boolean {
+            if (speed == null || limit == null) return false
+            return if (tolerance <= 0) speed > limit else speed >= limit + tolerance
+        }
     }
 }

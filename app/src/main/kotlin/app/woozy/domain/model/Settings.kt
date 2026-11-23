@@ -21,4 +21,13 @@ data class UserSettings(
     /** 0.0 – 1.0, relative to the navigation-guidance stream volume. */
     val voiceVolume: Float = 1.0f,
     val speechRate: SpeechRate = SpeechRate.NORMAL,
+    /** Spoken turn-by-turn instructions while navigating. */
+    val voiceGuidance: Boolean = true,
+    /** Alert when speed exceeds the limit by at least this many units (km/h or mph). */
+    val speedingTolerance: Int = 5,
+    /** Spoken warning when speeding (the visual warning is always on). */
+    val speedingVoiceAlert: Boolean = true,
+    val routeOptions: RouteOptions = RouteOptions(),
 )
+
+val SPEEDING_TOLERANCE_CHOICES = listOf(0, 5, 10, 15)

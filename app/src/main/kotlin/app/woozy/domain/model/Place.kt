@@ -9,3 +9,5 @@ data class Place(
     val longitude: Double,
     val category: String? = null,
 )
+
+enum class FavoriteKind { HOME, WORK }

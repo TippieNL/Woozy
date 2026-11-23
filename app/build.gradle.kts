@@ -37,6 +37,7 @@ android {
 
         buildConfigField("String", "MAP_STYLE_TILES_URL", "\"${secret("MAP_TILES_URL", "https://tiles.openfreemap.org/planet")}\"")
         buildConfigField("String", "MAP_GLYPHS_URL", "\"${secret("MAP_GLYPHS_URL", "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf")}\"")
+        buildConfigField("String", "ROUTING_BASE_URL", "\"${secret("ROUTING_BASE_URL", "https://valhalla1.openstreetmap.de/")}\"")
         buildConfigField("String", "GEOCODER_BASE_URL", "\"${secret("GEOCODER_BASE_URL", "https://photon.komoot.io/")}\"")
     }
 
@@ -59,6 +60,10 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true // android.util.Log etc. are no-ops in JVM tests
     }
 
     packaging {

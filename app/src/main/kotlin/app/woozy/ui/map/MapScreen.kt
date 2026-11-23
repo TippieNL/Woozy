@@ -32,6 +32,7 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -54,6 +55,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,11 +66,16 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import app.woozy.R
+import app.woozy.domain.model.FavoriteKind
 import app.woozy.domain.model.SpeedUnit
+import app.woozy.navigation.NavigationState
 import app.woozy.ui.components.CurrentSpeed
 import app.woozy.ui.components.RoundMapButton
 import app.woozy.ui.components.SpeedLimitSign
 import app.woozy.ui.components.StatusChip
+import app.woozy.ui.navigation.ManeuverBanner
+import app.woozy.ui.navigation.RoutePreviewPanel
+import app.woozy.ui.navigation.TripSummaryRow
 import app.woozy.ui.components.rememberSpeechInput
 import app.woozy.ui.permissions.LocationAccessCard
 import app.woozy.ui.reports.ReportSheet
@@ -100,6 +109,13 @@ fun MapScreen(
     LaunchedEffect(state.settings) { controller.applySettings(state.settings) }
     LaunchedEffect(state.reports) { controller.setReports(state.reports) }
     LaunchedEffect(state.destination) { controller.setDestination(state.destination) }
+    LaunchedEffect(state.navigation) {
+        when (val nav = state.navigation) {
+            NavigationState.Idle -> controller.clearRoutes()
+            is NavigationState.Previewing -> controller.showRoutePreview(nav.routes, nav.selected)
+            is NavigationState.Navigating -> controller.showActiveRoute(nav.route)
+        }
+    }
     LaunchedEffect(viewModel) {
         viewModel.eventFlow.collect { event ->
             when (event) {
@@ -144,7 +160,12 @@ fun MapScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            state.roadName?.let { RoadNamePill(it) }
+            val nav = state.navigation
+            if (nav is NavigationState.Navigating) {
+                ManeuverBanner(nav, imperial = state.settings.speedUnit == SpeedUnit.MPH)
+            } else {
+                state.roadName?.let { RoadNamePill(it) }
+            }
             StatusChips(state)
             LocationAccessCard(
                 permission = state.permission,
@@ -188,24 +209,47 @@ fun MapScreen(
                 color = Color.White.copy(alpha = 0.45f),
                 modifier = Modifier.align(Alignment.End).padding(end = 12.dp, bottom = 6.dp),
             )
-            state.destination?.let { place ->
-                DestinationCard(
-                    name = place.name,
-                    address = place.address,
-                    distance = state.destinationDistanceMeters?.let {
-                        stringResource(R.string.distance_straight_line, formatDistance(it, state.settings.speedUnit == SpeedUnit.MPH))
-                    },
-                    onClose = viewModel::clearDestination,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            val imperial = state.settings.speedUnit == SpeedUnit.MPH
+            when (val nav = state.navigation) {
+                is NavigationState.Previewing -> RoutePreviewPanel(
+                    preview = nav,
+                    options = state.settings.routeOptions,
+                    imperial = imperial,
+                    onSelect = viewModel::selectRoute,
+                    onOptionsChange = viewModel::setRouteOptions,
+                    onStart = viewModel::startNavigation,
+                    onCancel = viewModel::cancelPreview,
+                    modifier = Modifier.onSizeChanged { panelHeight = it.height },
                 )
+                else -> {
+                    val place = state.destination
+                    if (place != null && nav is NavigationState.Idle) {
+                        DestinationCard(
+                            name = place.name,
+                            address = place.address,
+                            distance = state.destinationDistanceMeters?.let {
+                                stringResource(R.string.distance_straight_line, formatDistance(it, imperial))
+                            },
+                            onRoute = viewModel::routeToDestination,
+                            onSaveFavorite = viewModel::saveFavorite,
+                            onClose = viewModel::clearDestination,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                    BottomPanel(
+                        state = state,
+                        onReport = { showReportSheet = true },
+                        bottomRow = {
+                            if (nav is NavigationState.Navigating) {
+                                TripSummaryRow(nav.progress, nav.route, imperial, onEnd = viewModel::stopNavigation, modifier = it)
+                            } else {
+                                SearchField(onSearch = { onOpenSearch("") }, onVoice = startVoice, modifier = it)
+                            }
+                        },
+                        modifier = Modifier.onSizeChanged { panelHeight = it.height },
+                    )
+                }
             }
-            BottomPanel(
-                state = state,
-                onReport = { showReportSheet = true },
-                onSearch = { onOpenSearch("") },
-                onVoice = startVoice,
-                modifier = Modifier.onSizeChanged { panelHeight = it.height },
-            )
         }
     }
 
@@ -224,8 +268,7 @@ fun MapScreen(
 private fun BottomPanel(
     state: MapUiState,
     onReport: () -> Unit,
-    onSearch: () -> Unit,
-    onVoice: () -> Unit,
+    bottomRow: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -252,7 +295,7 @@ private fun BottomPanel(
             )
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SpeedLimitSign(state.speedLimit, state.isSpeeding, size = 66.dp)
+                SpeedLimitSign(state.speedLimitDisplay, state.isSpeeding, size = 66.dp)
                 Spacer(Modifier.width(14.dp))
                 CurrentSpeed(state.speed, state.settings.speedUnit, state.isSpeeding)
                 Spacer(Modifier.weight(1f))
@@ -268,7 +311,7 @@ private fun BottomPanel(
                 }
             }
         }
-        SearchField(onSearch = onSearch, onVoice = onVoice, modifier = Modifier.padding(16.dp))
+        bottomRow(Modifier.padding(16.dp))
     }
 }
 
@@ -328,31 +371,64 @@ private fun StatusChips(state: MapUiState) {
 }
 
 @Composable
-private fun DestinationCard(name: String, address: String?, distance: String?, onClose: () -> Unit, modifier: Modifier = Modifier) {
-    Row(
+private fun DestinationCard(
+    name: String,
+    address: String?,
+    distance: String?,
+    onRoute: () -> Unit,
+    onSaveFavorite: (FavoriteKind) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
             .background(WoozyColors.PanelHigh)
-            .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 16.dp, top = 12.dp, bottom = 14.dp, end = 4.dp),
     ) {
-        Box(
-            Modifier.size(40.dp).clip(CircleShape).background(WoozyColors.Accent.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(painterResource(R.drawable.ic_pin), null, tint = WoozyColors.Accent, modifier = Modifier.size(22.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val secondary = listOfNotNull(distance, address).joinToString(" · ")
-            if (secondary.isNotEmpty()) {
-                Text(secondary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(WoozyColors.Accent.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(painterResource(R.drawable.ic_pin), null, tint = WoozyColors.Accent, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val secondary = listOfNotNull(distance, address).joinToString(" · ")
+                if (secondary.isNotEmpty()) {
+                    Text(secondary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            IconButton(onClick = onClose, modifier = Modifier.size(52.dp)) {
+                Icon(painterResource(R.drawable.ic_close), stringResource(R.string.close), tint = WoozyColors.TextSecondary)
             }
         }
-        IconButton(onClick = onClose, modifier = Modifier.size(52.dp)) {
-            Icon(painterResource(R.drawable.ic_close), stringResource(R.string.close), tint = WoozyColors.TextSecondary)
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = onRoute,
+                modifier = Modifier.height(52.dp).weight(1f),
+                shape = RoundedCornerShape(26.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = WoozyColors.Accent),
+            ) { Text(stringResource(R.string.nav_route), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+            Spacer(Modifier.width(8.dp))
+            val saveHome = stringResource(R.string.favorite_save_home)
+            TextButton(
+                onClick = { onSaveFavorite(FavoriteKind.HOME) },
+                modifier = Modifier.height(52.dp).semantics { contentDescription = saveHome },
+            ) {
+                Text(stringResource(R.string.favorite_home), color = WoozyColors.Accent)
+            }
+            val saveWork = stringResource(R.string.favorite_save_work)
+            TextButton(
+                onClick = { onSaveFavorite(FavoriteKind.WORK) },
+                modifier = Modifier.height(52.dp).semantics { contentDescription = saveWork },
+            ) {
+                Text(stringResource(R.string.favorite_work), color = WoozyColors.Accent)
+            }
         }
     }
 }

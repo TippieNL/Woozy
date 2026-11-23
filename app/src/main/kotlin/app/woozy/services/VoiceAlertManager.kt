@@ -51,10 +51,11 @@ class VoiceAlertManager @Inject constructor(
         private set
 
     @Synchronized
-    fun speak(text: String, priority: Priority = Priority.NORMAL, force: Boolean = false) {
+    fun speak(text: String, priority: Priority = Priority.NORMAL, force: Boolean = false, dedupe: Boolean = true) {
         if (!force && !settingsRepository.settings.value.voiceAlertsEnabled) return
         val now = System.currentTimeMillis()
-        if (!force && text == lastPhrase && now - lastPhraseAt < repeatSuppressMillis) return
+        // Turn guidance passes dedupe = false: two identical roundabout instructions in a row are both needed.
+        if (!force && dedupe && text == lastPhrase && now - lastPhraseAt < repeatSuppressMillis) return
         lastPhrase = text
         lastPhraseAt = now
 

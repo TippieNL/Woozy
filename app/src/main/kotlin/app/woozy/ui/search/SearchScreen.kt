@@ -60,6 +60,7 @@ import androidx.lifecycle.viewModelScope
 import app.woozy.R
 import app.woozy.data.repository.DestinationRepository
 import app.woozy.data.repository.SettingsRepository
+import app.woozy.domain.model.FavoriteKind
 import app.woozy.domain.model.GeoPoint
 import app.woozy.domain.model.Place
 import app.woozy.domain.model.SpeedUnit
@@ -95,6 +96,7 @@ sealed interface SearchResults {
 
 data class SearchUiState(
     val results: SearchResults = SearchResults.Idle,
+    val favorites: Map<FavoriteKind, Place> = emptyMap(),
     val recents: List<Place> = emptyList(),
     val origin: GeoPoint? = null,
     val imperial: Boolean = false,
@@ -132,8 +134,13 @@ class SearchViewModel @Inject constructor(
             }
         }
 
-    val state: StateFlow<SearchUiState> = combine(results, destinations.recents, settingsRepository.settings) { r, recents, settings ->
-        SearchUiState(r, recents, origin, settings.speedUnit == SpeedUnit.MPH)
+    val state: StateFlow<SearchUiState> = combine(
+        results,
+        destinations.recents,
+        destinations.favorites,
+        settingsRepository.settings,
+    ) { r, recents, favorites, settings ->
+        SearchUiState(r, favorites, recents, origin, settings.speedUnit == SpeedUnit.MPH)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), SearchUiState(origin = origin))
 
     fun onQueryChange(value: String) {
@@ -237,6 +244,18 @@ fun SearchScreen(viewModel: SearchViewModel, initialQuery: String, onClose: () -
         ) {
             when (val results = state.results) {
                 SearchResults.Idle -> {
+                    FavoriteKind.entries.forEach { kind ->
+                        state.favorites[kind]?.let { place ->
+                            item(key = "fav-" + kind.name) {
+                                PlaceRow(
+                                    place.copy(name = stringResource(if (kind == FavoriteKind.HOME) R.string.favorite_home else R.string.favorite_work), address = place.name),
+                                    R.drawable.ic_pin,
+                                    state.origin,
+                                    state.imperial,
+                                ) { select(place) }
+                            }
+                        }
+                    }
                     if (state.recents.isNotEmpty()) {
                         item {
                             Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -33,3 +33,14 @@ data class RecentDestinationEntity(
     val category: String?,
     val lastUsedAt: Long,
 )
+
+/** Saved Home / Work destinations. [kind] is a FavoriteKind name. */
+@Entity(tableName = "favorites")
+data class FavoriteEntity(
+    @PrimaryKey val kind: String,
+    val placeId: String,
+    val name: String,
+    val address: String?,
+    val latitude: Double,
+    val longitude: Double,
+)

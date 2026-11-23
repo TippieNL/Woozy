@@ -41,6 +41,9 @@ import androidx.lifecycle.viewModelScope
 import app.woozy.R
 import app.woozy.data.repository.SettingsRepository
 import app.woozy.domain.model.MapOrientation
+import app.woozy.domain.model.RouteOptions
+import app.woozy.domain.model.RouteType
+import app.woozy.domain.model.SPEEDING_TOLERANCE_CHOICES
 import app.woozy.domain.model.SpeechRate
 import app.woozy.domain.model.SpeedUnit
 import app.woozy.domain.model.UserSettings
@@ -74,6 +77,10 @@ class SettingsViewModel @Inject constructor(
     fun setVoiceAlerts(v: Boolean) = update { setVoiceAlertsEnabled(v) }
     fun setVoiceVolume(v: Float) = update { setVoiceVolume(v) }
     fun setSpeechRate(v: SpeechRate) = update { setSpeechRate(v) }
+    fun setVoiceGuidance(v: Boolean) = update { setVoiceGuidance(v) }
+    fun setSpeedingTolerance(v: Int) = update { setSpeedingTolerance(v) }
+    fun setSpeedingVoice(v: Boolean) = update { setSpeedingVoiceAlert(v) }
+    fun setRouteOptions(v: RouteOptions) = update { setRouteOptions(v) }
 
     fun testVoice() = voice.speak(context.getString(R.string.settings_test_voice_phrase), VoiceAlertManager.Priority.HIGH, force = true)
 }
@@ -102,6 +109,19 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 )
                 SwitchRow(stringResource(R.string.settings_3d), stringResource(R.string.settings_3d_desc), s.perspective3d, viewModel::setPerspective3d)
                 SwitchRow(stringResource(R.string.settings_keep_screen_on), stringResource(R.string.settings_keep_screen_on_desc), s.keepScreenOn, viewModel::setKeepScreenOn)
+                SwitchRow(stringResource(R.string.settings_voice_guidance), null, s.voiceGuidance, viewModel::setVoiceGuidance)
+                ChoiceRow(
+                    title = stringResource(R.string.settings_route_type),
+                    options = listOf(
+                        RouteType.FASTEST to stringResource(R.string.route_fastest),
+                        RouteType.SHORTEST to stringResource(R.string.route_shortest),
+                    ),
+                    selected = s.routeOptions.type,
+                    onSelect = { viewModel.setRouteOptions(s.routeOptions.copy(type = it)) },
+                )
+                SwitchRow(stringResource(R.string.route_avoid_tolls), null, s.routeOptions.avoidTolls) { viewModel.setRouteOptions(s.routeOptions.copy(avoidTolls = it)) }
+                SwitchRow(stringResource(R.string.route_avoid_highways), null, s.routeOptions.avoidHighways) { viewModel.setRouteOptions(s.routeOptions.copy(avoidHighways = it)) }
+                SwitchRow(stringResource(R.string.route_avoid_ferries), null, s.routeOptions.avoidFerries) { viewModel.setRouteOptions(s.routeOptions.copy(avoidFerries = it)) }
             }
 
             SectionHeader(stringResource(R.string.settings_section_speed))
@@ -111,6 +131,21 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                     options = listOf(SpeedUnit.KMH to stringResource(R.string.settings_kmh), SpeedUnit.MPH to stringResource(R.string.settings_mph)),
                     selected = s.speedUnit,
                     onSelect = viewModel::setUnit,
+                )
+                val unitLabel = stringResource(if (s.speedUnit == SpeedUnit.KMH) R.string.settings_kmh else R.string.settings_mph)
+                ChoiceRow(
+                    title = stringResource(R.string.settings_speeding_threshold),
+                    description = stringResource(R.string.settings_speeding_threshold_desc),
+                    options = SPEEDING_TOLERANCE_CHOICES.map { it to if (it == 0) stringResource(R.string.settings_speeding_over) else "+$it" },
+                    selected = s.speedingTolerance,
+                    onSelect = viewModel::setSpeedingTolerance,
+                    suffix = unitLabel,
+                )
+                SwitchRow(stringResource(R.string.settings_speeding_voice), null, s.speedingVoiceAlert, viewModel::setSpeedingVoice)
+                Text(
+                    stringResource(R.string.settings_speed_limit_note),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
             }
 
@@ -173,9 +208,17 @@ private fun SwitchRow(title: String, description: String?, checked: Boolean, onC
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun <T> ChoiceRow(title: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+private fun <T> ChoiceRow(
+    title: String,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    description: String? = null,
+    suffix: String? = null,
+) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Text(title, style = MaterialTheme.typography.bodyLarge, color = WoozyColors.TextPrimary)
+        description?.let { Text(if (suffix != null) "$it ($suffix)" else it, style = MaterialTheme.typography.bodyMedium) }
         Spacer(Modifier.height(10.dp))
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             options.forEachIndexed { index, (value, label) ->

@@ -56,3 +56,15 @@ interface RecentDestinationDao {
     @Query("DELETE FROM recent_destinations")
     suspend fun clear()
 }
+
+@Dao
+interface FavoriteDao {
+    @Query("SELECT * FROM favorites")
+    fun observeAll(): Flow<List<FavoriteEntity>>
+
+    @Upsert
+    suspend fun upsert(favorite: FavoriteEntity)
+
+    @Query("DELETE FROM favorites WHERE kind = :kind")
+    suspend fun delete(kind: String)
+}

@@ -12,12 +12,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import app.woozy.BuildConfig
 import app.woozy.R
+import app.woozy.domain.model.GeoPoint
 import app.woozy.domain.model.LocationFix
 import app.woozy.domain.model.MapOrientation
 import app.woozy.domain.model.Place
 import app.woozy.domain.model.ReportType
+import app.woozy.domain.model.Route
 import app.woozy.domain.model.TrafficReport
 import app.woozy.domain.model.UserSettings
+import app.woozy.navigation.RouteGeometry
 import app.woozy.ui.reports.style
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponent
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.LocationComponentOptions
@@ -38,11 +42,13 @@ import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
 /**
@@ -74,6 +80,14 @@ class MapController(private val context: Context) {
     private var reports: List<TrafficReport> = emptyList()
     private var destination: Place? = null
     private var viewport = Viewport()
+
+    // Routes
+    private var previewRoutes: List<Route> = emptyList()
+    private var previewSelected = 0
+    private var activeRoute: Route? = null
+    private var activeGeometry: RouteGeometry? = null
+    private var fittedRoutes: List<Route>? = null
+    private var navZoomBucket = -1
 
     // Lifecycle bookkeeping so dispose never double-calls MapView callbacks.
     private var started = false
@@ -128,6 +142,33 @@ class MapController(private val context: Context) {
     }
 
     private fun onStyleLoaded(style: Style) {
+        style.addSource(GeoJsonSource(ROUTE_ALT_SOURCE))
+        style.addSource(GeoJsonSource(ROUTE_SOURCE))
+        val routeLineLayout = arrayOf(PropertyFactory.lineCap("round"), PropertyFactory.lineJoin("round"))
+        style.addLayerBelow(
+            LineLayer(ROUTE_ALT_LAYER, ROUTE_ALT_SOURCE).withProperties(
+                *routeLineLayout,
+                PropertyFactory.lineColor("#5F6B7A"),
+                PropertyFactory.lineWidth(routeWidth(0.8f)),
+            ),
+            FIRST_LABEL_LAYER,
+        )
+        style.addLayerBelow(
+            LineLayer(ROUTE_CASING_LAYER, ROUTE_SOURCE).withProperties(
+                *routeLineLayout,
+                PropertyFactory.lineColor("#0A4F99"),
+                PropertyFactory.lineWidth(routeWidth(1.45f)),
+            ),
+            FIRST_LABEL_LAYER,
+        )
+        style.addLayerBelow(
+            LineLayer(ROUTE_LAYER, ROUTE_SOURCE).withProperties(
+                *routeLineLayout,
+                PropertyFactory.lineColor("#138BFF"),
+                PropertyFactory.lineWidth(routeWidth(1f)),
+            ),
+            FIRST_LABEL_LAYER,
+        )
         style.addSource(GeoJsonSource(REPORTS_SOURCE))
         style.addLayer(
             SymbolLayer(REPORTS_LAYER, REPORTS_SOURCE).withProperties(
@@ -151,6 +192,7 @@ class MapController(private val context: Context) {
         activateLocationComponent(style)
         styleLoaded = true
         pushReports()
+        pushRoutes()
         pushDestination(animate = false)
         lastFix?.let { updateLocation(it) }
     }
@@ -235,6 +277,15 @@ class MapController(private val context: Context) {
                 map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(fix.latitude, fix.longitude), FOLLOW_ZOOM))
             }
         }
+        if (activeRoute != null) {
+            activeGeometry?.let { geometry ->
+                // Draw only the part of the route still ahead.
+                geometry.snap(GeoPoint(fix.latitude, fix.longitude))?.takeIf { it.distanceFromRoute < 80 }?.let { snap ->
+                    routeSource()?.setGeoJson(lineFeature(geometry.remainingFrom(snap.distanceAlong)))
+                }
+            }
+            if (_isFollowing.value) applyNavigationZoom(speed)
+        }
         queryRoadName(fix)
     }
 
@@ -264,11 +315,96 @@ class MapController(private val context: Context) {
     fun setDestination(place: Place?) {
         if (place == destination) return
         destination = place
-        pushDestination(animate = place != null)
+        pushDestination(animate = place != null && activeRoute == null && previewRoutes.isEmpty())
         if (place == null && settings.autoFollow) startFollowing(animate = true)
     }
 
+    /** Route choice on screen: all candidates, [selected] highlighted; fits the camera once per result. */
+    fun showRoutePreview(routes: List<Route>, selected: Int) {
+        activeRoute = null
+        activeGeometry = null
+        previewRoutes = routes
+        previewSelected = selected
+        pushRoutes()
+        if (routes.isNotEmpty() && fittedRoutes !== routes) {
+            fittedRoutes = routes
+            fitToRoutes(routes)
+        }
+    }
+
+    /** Active guidance: only the route ahead is drawn and the camera follows with speed-based zoom. */
+    fun showActiveRoute(route: Route) {
+        if (route === activeRoute) return
+        val firstActivation = activeRoute == null
+        previewRoutes = emptyList()
+        fittedRoutes = null
+        activeRoute = route
+        activeGeometry = RouteGeometry(route.points)
+        navZoomBucket = -1
+        pushRoutes()
+        if (firstActivation) startFollowing(animate = true)
+    }
+
+    fun clearRoutes() {
+        val hadRoute = activeRoute != null || previewRoutes.isNotEmpty()
+        previewRoutes = emptyList()
+        activeRoute = null
+        activeGeometry = null
+        fittedRoutes = null
+        pushRoutes()
+        if (hadRoute && settings.autoFollow && destination == null) startFollowing(animate = true)
+    }
+
     // endregion
+
+    private fun routeSource() = map?.style?.getSourceAs<GeoJsonSource>(ROUTE_SOURCE)
+
+    private fun lineFeature(points: List<GeoPoint>): Feature =
+        Feature.fromGeometry(LineString.fromLngLats(points.map { Point.fromLngLat(it.longitude, it.latitude) }))
+
+    private fun pushRoutes() {
+        if (!styleLoaded) return
+        val style = map?.style ?: return
+        val main = activeRoute ?: previewRoutes.getOrNull(previewSelected)
+        style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE)?.setGeoJson(
+            FeatureCollection.fromFeatures(listOfNotNull(main?.let { lineFeature(it.points) })),
+        )
+        style.getSourceAs<GeoJsonSource>(ROUTE_ALT_SOURCE)?.setGeoJson(
+            FeatureCollection.fromFeatures(previewRoutes.filterIndexed { i, _ -> i != previewSelected }.map { lineFeature(it.points) }),
+        )
+    }
+
+    private fun fitToRoutes(routes: List<Route>) {
+        val map = map ?: return
+        val bounds = LatLngBounds.Builder().apply {
+            routes.forEach { r -> r.points.forEach { include(LatLng(it.latitude, it.longitude)) } }
+        }.build()
+        locationComponent?.cameraMode = CameraMode.NONE
+        _isFollowing.value = false
+        val pad = dp(40f).toInt()
+        val v = viewport
+        map.animateCamera(
+            CameraUpdateFactory.newLatLngBounds(bounds, pad, v.topInsetPx + pad, pad, v.bottomObscuredPx + pad),
+            900,
+        )
+    }
+
+    /** Wider view at higher speeds so the next maneuver stays on screen. */
+    private fun applyNavigationZoom(speedMps: Float) {
+        val bucket = when {
+            speedMps < 14f -> 0 // < 50 km/h
+            speedMps < 25f -> 1 // < 90 km/h
+            else -> 2
+        }
+        if (bucket == navZoomBucket) return
+        navZoomBucket = bucket
+        locationComponent?.zoomWhileTracking(doubleArrayOf(17.0, 16.0, 15.0)[bucket], 1_500L)
+    }
+
+    private fun routeWidth(scale: Float) = Expression.interpolate(
+        Expression.exponential(1.5f), Expression.zoom(),
+        Expression.stop(8, 3f * scale), Expression.stop(14, 8f * scale), Expression.stop(18, 20f * scale),
+    )
 
     private fun startFollowing(animate: Boolean) {
         val lc = locationComponent ?: return
@@ -277,6 +413,7 @@ class MapController(private val context: Context) {
         val tilt = if (settings.perspective3d) FOLLOW_TILT else 0.0
         val bearing = if (mode == CameraMode.TRACKING_GPS_NORTH) 0.0 else null
         lc.paddingWhileTracking(trackingPadding(), 0L)
+        navZoomBucket = -1 // re-apply speed-based zoom on the next fix while navigating
         lc.setCameraMode(mode, if (animate) 750L else 0L, FOLLOW_ZOOM, bearing, tilt, null)
         _isFollowing.value = true
     }
@@ -442,6 +579,12 @@ class MapController(private val context: Context) {
         private const val DESTINATION_SOURCE = "woozy-destination"
         private const val DESTINATION_LAYER = "woozy-destination-layer"
         private const val PROP_ICON = "icon"
+        private const val ROUTE_SOURCE = "woozy-route"
+        private const val ROUTE_ALT_SOURCE = "woozy-route-alt"
+        private const val ROUTE_LAYER = "woozy-route-layer"
+        private const val ROUTE_CASING_LAYER = "woozy-route-casing"
+        private const val ROUTE_ALT_LAYER = "woozy-route-alt-layer"
+        private const val FIRST_LABEL_LAYER = "water-name-point"
 
         fun reportIconId(type: ReportType) = "woozy-report-${type.name.lowercase()}"
     }

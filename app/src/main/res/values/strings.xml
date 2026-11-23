@@ -25,6 +25,39 @@
     <string name="distance_straight_line">%1$s away (straight line)</string>
     <string name="close">Close</string>
 
+    <string name="speeding_voice">You are exceeding the speed limit.</string>
+
+    <!-- Navigation -->
+    <string name="nav_route">Route</string>
+    <string name="nav_start">Start</string>
+    <string name="nav_end">End navigation</string>
+    <string name="nav_then">Then</string>
+    <string name="nav_recalculating">Recalculating route…</string>
+    <string name="nav_arrival">arrive %1$s</string>
+    <string name="nav_arrived">You have arrived at %1$s</string>
+    <string name="cancel">Cancel</string>
+    <string name="duration_min">%1$d min</string>
+    <string name="duration_hour_min">%1$d h %2$02d min</string>
+    <string name="route_loading">Calculating route…</string>
+    <string name="route_fastest">Fastest</string>
+    <string name="route_shortest">Shortest</string>
+    <string name="route_avoid_tolls">Avoid tolls</string>
+    <string name="route_avoid_highways">Avoid highways</string>
+    <string name="route_avoid_ferries">Avoid ferries</string>
+    <string name="route_badge_fastest">Fastest</string>
+    <string name="route_badge_toll">Toll</string>
+    <string name="route_badge_ferry">Ferry</string>
+    <string name="route_error_location">No GPS position yet — wait for a fix and try again.</string>
+    <string name="route_error_network">Routing server unreachable. Check your connection.</string>
+    <string name="route_error_no_route">No route found to this destination.</string>
+    <string name="route_error_server">The routing server returned an error. Try again later.</string>
+    <string name="favorite_home">Home</string>
+    <string name="favorite_work">Work</string>
+    <string name="favorite_save_home">Save as Home</string>
+    <string name="favorite_save_work">Save as Work</string>
+    <string name="favorite_saved_home">Saved as Home</string>
+    <string name="favorite_saved_work">Saved as Work</string>
+
     <!-- Permissions -->
     <string name="perm_title">Location needed</string>
     <string name="perm_body">Woozy uses your location to show where you are, measure your speed and attach reports to the right road. Your location stays on this device.</string>
@@ -111,7 +144,14 @@
     <string name="settings_3d_desc">Tilt the map while following</string>
     <string name="settings_keep_screen_on">Keep screen on</string>
     <string name="settings_keep_screen_on_desc">While the map is visible</string>
+    <string name="settings_voice_guidance">Spoken turn instructions</string>
+    <string name="settings_route_type">Route type</string>
     <string name="settings_section_speed">Speed</string>
+    <string name="settings_speeding_threshold">Speeding warning</string>
+    <string name="settings_speeding_threshold_desc">Warn when your speed exceeds the limit by</string>
+    <string name="settings_speeding_over">Over</string>
+    <string name="settings_speeding_voice">Spoken speeding warning</string>
+    <string name="settings_speed_limit_note">Speed limits come from OpenStreetMap via the routing server. Where a road has no data the sign shows "--".</string>
     <string name="settings_units">Units</string>
     <string name="settings_kmh">km/h</string>
     <string name="settings_mph">mph</string>
@@ -127,7 +167,7 @@
 
     <!-- About / privacy -->
     <string name="about_title">About &amp; data sources</string>
-    <string name="about_body">Woozy %1$s\n\nMap data © OpenStreetMap contributors (ODbL). Vector tiles by OpenFreeMap, schema © OpenMapTiles. Search by Photon (komoot), based on OpenStreetMap.\n\nThe public OpenFreeMap and Photon servers are used for development. Production use should run its own tile and geocoding servers or a commercial plan.</string>
+    <string name="about_body">Woozy %1$s\n\nMap data © OpenStreetMap contributors (ODbL). Vector tiles by OpenFreeMap, schema © OpenMapTiles. Search by Photon (komoot), based on OpenStreetMap. Routing, turn instructions and speed limits by Valhalla on OpenStreetMap data.\n\nThe public OpenFreeMap, Photon and Valhalla (FOSSGIS) servers are used for development. Production use should run its own tile and geocoding servers or a commercial plan.</string>
     <string name="privacy_title">Privacy</string>
-    <string name="privacy_body">• Location is only read while Woozy is open on screen.\n• No location history is stored. Only reports you create and destinations you pick are saved, on this device.\n• Search queries are sent to the geocoding server together with your approximate position to rank nearby results.\n• Map tiles are downloaded from the tile server; the request reveals which area you are viewing.\n• Nothing is uploaded to a Woozy server: no backend is configured in this build.</string>
+    <string name="privacy_body">• Location is only read while Woozy is open on screen.\n• No location history is stored. Only reports you create and destinations you pick are saved, on this device.\n• Search queries are sent to the geocoding server together with your approximate position to rank nearby results.\n• Map tiles are downloaded from the tile server; the request reveals which area you are viewing.\n• Routing and speed-limit lookups send your current position, destination and a short trail of recent positions to the routing server.\n• Nothing is uploaded to a Woozy server: no backend is configured in this build.</string>
 </resources>
