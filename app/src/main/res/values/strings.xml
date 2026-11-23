@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Woozy</string>
+
+    <!-- Bottom bar -->
+    <string name="tab_menu">Menu</string>
+    <string name="tab_list">List</string>
+    <string name="tab_map">Map</string>
+
+    <!-- Map screen -->
+    <string name="report">Report</string>
+    <string name="where_to">Where to?</string>
+    <string name="voice_command">Voice command</string>
+    <string name="recenter">Recenter on my location</string>
+    <string name="voice_alerts_on">Voice alerts on</string>
+    <string name="voice_alerts_off">Voice alerts muted</string>
+    <string name="speed_limit_unknown">Speed limit unknown</string>
+    <string name="speed_limit_value">Speed limit %1$d</string>
+    <string name="current_speed">Current speed</string>
+    <string name="gps_searching">Searching for GPS…</string>
+    <string name="gps_weak">Weak GPS signal</string>
+    <string name="gps_lost">GPS signal lost</string>
+    <string name="offline">Offline · showing cached map</string>
+    <string name="map_attribution">© OpenFreeMap © OpenMapTiles © OpenStreetMap</string>
+    <string name="distance_straight_line">%1$s away (straight line)</string>
+    <string name="close">Close</string>
+
+    <string name="speeding_voice">You are exceeding the speed limit.</string>
+
+    <!-- Navigation -->
+    <string name="nav_route">Route</string>
+    <string name="nav_start">Start</string>
+    <string name="nav_end">End navigation</string>
+    <string name="nav_then">Then</string>
+    <string name="nav_recalculating">Recalculating route…</string>
+    <string name="nav_arrival">arrive %1$s</string>
+    <string name="nav_arrived">You have arrived at %1$s</string>
+    <string name="cancel">Cancel</string>
+    <string name="duration_min">%1$d min</string>
+    <string name="duration_hour_min">%1$d h %2$02d min</string>
+    <string name="route_loading">Calculating route…</string>
+    <string name="route_fastest">Fastest</string>
+    <string name="route_shortest">Shortest</string>
+    <string name="route_avoid_tolls">Avoid tolls</string>
+    <string name="route_avoid_highways">Avoid highways</string>
+    <string name="route_avoid_ferries">Avoid ferries</string>
+    <string name="route_badge_fastest">Fastest</string>
+    <string name="route_badge_toll">Toll</string>
+    <string name="route_badge_ferry">Ferry</string>
+    <string name="route_error_location">No GPS position yet — wait for a fix and try again.</string>
+    <string name="route_error_network">Routing server unreachable. Check your connection.</string>
+    <string name="route_error_no_route">No route found to this destination.</string>
+    <string name="route_error_server">The routing server returned an error. Try again later.</string>
+    <string name="favorite_home">Home</string>
+    <string name="favorite_work">Work</string>
+    <string name="favorite_save_home">Save as Home</string>
+    <string name="favorite_save_work">Save as Work</string>
+    <string name="favorite_saved_home">Saved as Home</string>
+    <string name="favorite_saved_work">Saved as Work</string>
+
+    <!-- Permissions -->
+    <string name="perm_title">Location needed</string>
+    <string name="perm_body">Woozy uses your location to show where you are, measure your speed and attach reports to the right road. Your location stays on this device.</string>
+    <string name="perm_allow">Allow location</string>
+    <string name="perm_denied_body">Without location access the map can\'t follow you and your speed can\'t be measured.</string>
+    <string name="perm_permanent_body">Location access was denied. Enable it for Woozy in system settings.</string>
+    <string name="perm_open_settings">Open settings</string>
+    <string name="perm_precise_title">Precise location is off</string>
+    <string name="perm_precise_body">Approximate location is too coarse for speed and road detection. Allow precise location.</string>
+    <string name="location_off_title">Location is turned off</string>
+    <string name="location_off_body">Turn on device location to see your position and speed.</string>
+    <string name="location_off_action">Turn on</string>
+
+    <!-- Reports -->
+    <string name="report_title">What do you see?</string>
+    <string name="report_subtitle">Reported at your current position</string>
+    <string name="report_type_speed_camera">Speed camera</string>
+    <string name="report_type_mobile_trap">Mobile speed trap</string>
+    <string name="report_type_accident">Accident</string>
+    <string name="report_type_jam">Traffic jam</string>
+    <string name="report_type_roadworks">Roadworks</string>
+    <string name="report_type_hazard">Road hazard</string>
+    <string name="report_type_stopped">Vehicle stopped</string>
+    <string name="report_type_object">Object on road</string>
+    <string name="report_type_police">Police</string>
+    <string name="report_type_danger">Dangerous situation</string>
+    <string name="report_sent">%1$s reported</string>
+    <string name="report_sent_voice">%1$s reported. Thank you.</string>
+    <string name="report_duplicate">You already reported this here</string>
+    <string name="report_too_fast">Hold on — you just sent a report</string>
+    <string name="report_no_location">No GPS position yet — can\'t place the report</string>
+    <string name="report_local_only">Saved on this device. No report server is configured, so it is not shared.</string>
+
+    <!-- Reports list -->
+    <string name="reports_title">Nearby reports</string>
+    <string name="reports_empty_title">No active reports</string>
+    <string name="reports_empty_body">Reports you make with the Report button appear here and on the map until they expire.</string>
+    <string name="reports_source_notice">Live incidents, speed cameras and traffic need a data provider, which is not configured yet. This list shows reports made on this device only.</string>
+    <string name="reports_age_now">just now</string>
+    <string name="reports_age_min">%1$d min ago</string>
+    <string name="reports_age_hour">%1$d h ago</string>
+    <string name="reports_expires_min">expires in %1$d min</string>
+    <string name="reports_expires_hour">expires in %1$d h</string>
+    <string name="reports_local_badge">This device</string>
+    <string name="reports_remove">Remove report</string>
+    <string name="reports_distance_unknown">distance unknown</string>
+
+    <!-- Search -->
+    <string name="search_hint">Search address, place or business</string>
+    <string name="search_recent">Recent</string>
+    <string name="search_clear_recent">Clear</string>
+    <string name="search_no_results">No results</string>
+    <string name="search_error">Search failed. Check your connection.</string>
+    <string name="search_attribution">Search by Photon · © OpenStreetMap contributors</string>
+    <string name="back">Back</string>
+    <string name="dictate">Dictate</string>
+
+    <!-- Voice -->
+    <string name="voice_prompt">Say a command, e.g. \"report accident\" or \"navigate to Amsterdam\"</string>
+    <string name="voice_unavailable">Speech recognition is not available on this device — type instead.</string>
+    <string name="voice_not_understood">Didn\'t catch that</string>
+    <string name="voice_no_favorite_home">No home address saved yet</string>
+    <string name="voice_no_favorite_work">No work address saved yet</string>
+    <string name="voice_cancelled">Destination cleared</string>
+    <string name="voice_nothing_to_repeat">Nothing to repeat</string>
+
+    <!-- Menu -->
+    <string name="menu_title">Menu</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_about">About &amp; data sources</string>
+    <string name="menu_privacy">Privacy</string>
+    <string name="menu_clear_recents">Clear recent destinations</string>
+    <string name="menu_recents_cleared">Recent destinations cleared</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_navigation">Navigation</string>
+    <string name="settings_auto_follow">Auto-follow GPS</string>
+    <string name="settings_auto_follow_desc">Keep the map centred on your position</string>
+    <string name="settings_orientation">Map orientation</string>
+    <string name="settings_heading_up">Direction-up</string>
+    <string name="settings_north_up">North-up</string>
+    <string name="settings_3d">3D perspective</string>
+    <string name="settings_3d_desc">Tilt the map while following</string>
+    <string name="settings_keep_screen_on">Keep screen on</string>
+    <string name="settings_keep_screen_on_desc">While the map is visible</string>
+    <string name="settings_voice_guidance">Spoken turn instructions</string>
+    <string name="settings_route_type">Route type</string>
+    <string name="settings_section_speed">Speed</string>
+    <string name="settings_speeding_threshold">Speeding warning</string>
+    <string name="settings_speeding_threshold_desc">Warn when your speed exceeds the limit by</string>
+    <string name="settings_speeding_over">Over</string>
+    <string name="settings_speeding_voice">Spoken speeding warning</string>
+    <string name="settings_speed_limit_note">Speed limits come from OpenStreetMap via the routing server. Where a road has no data the sign shows "--".</string>
+    <string name="settings_units">Units</string>
+    <string name="settings_kmh">km/h</string>
+    <string name="settings_mph">mph</string>
+    <string name="settings_section_voice">Voice</string>
+    <string name="settings_voice_alerts">Voice alerts</string>
+    <string name="settings_voice_volume">Voice volume</string>
+    <string name="settings_speech_rate">Speech rate</string>
+    <string name="settings_rate_slow">Slow</string>
+    <string name="settings_rate_normal">Normal</string>
+    <string name="settings_rate_fast">Fast</string>
+    <string name="settings_test_voice">Test voice</string>
+    <string name="settings_test_voice_phrase">Voice alerts are working.</string>
+
+    <!-- About / privacy -->
+    <string name="about_title">About &amp; data sources</string>
+    <string name="about_body">Woozy %1$s\n\nMap data © OpenStreetMap contributors (ODbL). Vector tiles by OpenFreeMap, schema © OpenMapTiles. Search by Photon (komoot), based on OpenStreetMap. Routing, turn instructions and speed limits by Valhalla on OpenStreetMap data.\n\nThe public OpenFreeMap, Photon and Valhalla (FOSSGIS) servers are used for development. Production use should run its own tile and geocoding servers or a commercial plan.</string>
+    <string name="privacy_title">Privacy</string>
+    <string name="privacy_body">• Location is only read while Woozy is open on screen.\n• No location history is stored. Only reports you create and destinations you pick are saved, on this device.\n• Search queries are sent to the geocoding server together with your approximate position to rank nearby results.\n• Map tiles are downloaded from the tile server; the request reveals which area you are viewing.\n• Routing and speed-limit lookups send your current position, destination and a short trail of recent positions to the routing server.\n• Nothing is uploaded to a Woozy server: no backend is configured in this build.</string>
+</resources>
